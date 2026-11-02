@@ -1,0 +1,153 @@
+{
+ "pages": {
+  "/": {
+   "title": "Kingston Podiatry Chiropody - foot pain, embarrassing feet - kingstonfeet",
+   "description": "kingstonfeet - Kingston Podiatry & Chiropody services. Worried about your nails, feet or heels? Ditch the pain and get moving again with trouble free feet."
+  },
+  "/about-us-jo-lea-podiatrist/": {
+   "title": "About Us - Jo Lea Podiatrist - Kingston - kingstonfeet",
+   "description": "I\u2019m Jo Lea, Podiatrist. I'm passionate about restoring comfort to patients who have foot pain. You really can\u2019t show me anything that will surprise me."
+  },
+  "/your-foot-problem/": {
+   "title": "My Foot Problem - kingstonfeet",
+   "description": ""
+  },
+  "/book-now/": {
+   "title": "Book now - kingstonfeet",
+   "description": "Online booking for all appointment types. Podiatry, foot problems for new and current patients alike. Clinic only appointments. Call us for home visits requests."
+  },
+  "/book-online/": {
+   "title": "Book Online - kingstonfeet",
+   "description": "Book online to secure an appointment at a time convenient to you. We are open Tuesday evenings and most Saturdays. And of course from Monday to Friday we welcome patients too !"
+  },
+  "/contact-us/": {
+   "title": "Contact Us - kingstonfeet",
+   "description": ""
+  },
+  "/find-us/": {
+   "title": "Find Us - kingstonfeet",
+   "description": ""
+  },
+  "/voluntary/": {
+   "title": "About Us - Jo Lea Podiatrist - Kingston - kingstonfeet",
+   "description": "I\u2019m Jo Lea, Podiatrist. I'm passionate about restoring comfort to patients who have foot pain. You really can\u2019t show me anything that will surprise me."
+  },
+  "/afterprocedure/": {
+   "title": "About Us - Jo Lea Podiatrist - Kingston - kingstonfeet",
+   "description": "I\u2019m Jo Lea, Podiatrist. I'm passionate about restoring comfort to patients who have foot pain. You really can\u2019t show me anything that will surprise me."
+  },
+  "/blog/": {
+   "title": "Blog - kingstonfeet",
+   "description": ""
+  },
+  "/blog/toenail-trouble/": {
+   "title": "Toenail Trouble - kingstonfeet",
+   "description": ""
+  },
+  "/blog/foot-pain/": {
+   "title": "Foot Pain - kingstonfeet",
+   "description": ""
+  },
+  "/blog/embarrassing-feet/": {
+   "title": "Embarrassing Feet - kingstonfeet",
+   "description": ""
+  },
+  "/blog/biomechanical-assessment/": {
+   "title": "Biomechanical Assessment - kingstonfeet",
+   "description": ""
+  },
+  "/blog/bunions-joint-problems/": {
+   "title": "Bunions & Joint Problems - kingstonfeet",
+   "description": ""
+  },
+  "/blog/toenail-reconstructions/": {
+   "title": "Toenail Reconstructions - kingstonfeet",
+   "description": ""
+  },
+  "/blog/warm-wax-therapy/": {
+   "title": "Warm Wax Therapy - kingstonfeet",
+   "description": ""
+  },
+  "/blog/swift-microwave-therapy/": {
+   "title": "Swift Microwave Therapy - kingstonfeet",
+   "description": ""
+  },
+  "/privacy-policy/": {
+   "title": "Privacy Policy - kingstonfeet",
+   "description": ""
+  },
+  "/cookie-policy/": {
+   "title": "Cookie Policy - kingstonfeet",
+   "description": ""
+  }
+ },
+ "forwards": {
+  "/covid-19-landing-page/": "/",
+  "/lockdown-extra-safety-measures/": "/",
+  "/hiring/": "/",
+  "/november_2020_images/": "/",
+  "/kingston-podiatry-chiropody-kingstonfeet-copy/": "/",
+  "/physiomore/": "/",
+  "/category/blog/": "/blog/",
+  "/author/kfjoanna/": "/blog/",
+  "/blog/page/2/": "/blog/"
+ },
+ "images": [
+  "/images/2018/07/Kingston-Bridge.jpg",
+  "/images/2018/07/biomechanical-assessment.jpg",
+  "/images/2018/07/swift-treatment.jpg",
+  "/images/2018/09/Richmond-Park.jpg",
+  "/images/2018/09/nail-reconstruction.jpg",
+  "/images/2018/10/Kingston-Bridge-at-night.jpg",
+  "/images/2018/10/Kingston-rowing-club.jpg",
+  "/images/2018/10/Kingston-underpass-mural.jpg",
+  "/images/2018/10/LED-lights.jpg",
+  "/images/2018/10/Richmond-Park-bg-2.jpg",
+  "/images/2018/10/Right-WP-reconstruction-after.jpg",
+  "/images/2018/10/Right-WP-reconstruction-initial.jpg",
+  "/images/2018/10/swift-1.jpg",
+  "/images/2018/10/swift-2.jpg",
+  "/images/2018/10/swift-3.jpg",
+  "/images/2018/10/tudor-market-square.jpg",
+  "/images/2018/10/warm-wax-treatment.jpg",
+  "/images/2019/01/bunions.jpg",
+  "/images/2019/01/callous.jpg",
+  "/images/2019/01/nails-before-after-2.jpg",
+  "/images/2019/02/Lea-family-skiing.jpg",
+  "/images/2019/03/Foot-64afe5.png",
+  "/images/2019/03/Heel-64afe5.png",
+  "/images/2019/03/Toe-64afe5.png",
+  "/images/2019/03/embarrassing-feet.jpg",
+  "/images/2019/03/fungal-toenail.jpg",
+  "/images/2019/03/heelpain.jpg",
+  "/images/2019/03/holiday-feet-1.jpg",
+  "/images/2019/03/toenail-reconstruction.jpg",
+  "/images/2019/04/Swift_Logo.png",
+  "/images/2019/04/college-of-podiatry-logo.png",
+  "/images/2019/04/hcpc-logo.png",
+  "/images/2019/04/kingstonfeet-clinic-2.jpg",
+  "/images/2019/04/kingstonfeet-clinic.jpg",
+  "/images/2020/07/16C9DC65-2761-44A3-99C0-8E038F57E191_1_201_a.jpg",
+  "/images/2023/02/B0008294.jpg",
+  "/images/2023/02/River-Thames-at-Kingston.jpg",
+  "/images/2023/07/IMG_1516.jpg",
+  "/images/2023/08/B0008427.jpg",
+  "/images/2024/08/Forgotten-Feet.jpg",
+  "/images/2024/08/Picture-1.jpg",
+  "/images/2024/08/StandByMe.jpg",
+  "/images/2025/10/IMG_2022.jpg",
+  "/images/cache/36B29169-0FEF-45A4-A61B-2A644F088B1A-768x1024-portrait.jpg",
+  "/images/cache/Andy-headshot-225x300-square.jpg",
+  "/images/cache/Jo-headshot-150x150-square.jpg",
+  "/images/cache/Jo-headshot-768x1024-square.jpg",
+  "/images/cache/Joanna-Lea-Podiatrist-Kingston-portrait.jpg",
+  "/images/cache/WP_20140210_15_20_51_Pro20140211194737-150x150-landscape.jpg",
+  "/images/cache/bunions-2-panorama.jpg",
+  "/images/cache/cracked-heels-2-panorama.jpg",
+  "/images/cache/ingrowing-toenail-panorama.jpg",
+  "/images/cache/podiatry-treatment-300x200-landscape.jpg",
+  "/images/cache/testimonial-Shirley-300x221-landscape.jpg",
+  "/images/cache/verruca-treatment-panorama.jpg"
+ ],
+ "problems": []
+}
