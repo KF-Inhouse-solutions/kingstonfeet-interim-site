@@ -306,7 +306,8 @@ def clean(node, page):
                         inner = v
                         break
             if (not href or href == "#") and "fl-button" in cls:
-                out.append(f'<span class="btn">{inner}</span>')   # the original's button had no link either
+                # the original's "Click Here" ("Drop us a line today") had no link: Josh asked for it to go to Contact Us
+                out.append(f'<a class="btn" href="{rel(page, "/contact-us/")}">{inner}</a>')
                 continue
             if not href or href == "#" or "wp-admin" in href or "wp-login" in href:
                 out.append(inner)

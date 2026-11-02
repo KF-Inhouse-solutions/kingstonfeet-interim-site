@@ -12,6 +12,12 @@ STYLES = Path(__file__).resolve().parent / "styles"
 CLEAR = {"rgba(0, 0, 0, 0)", "transparent", "none", None, ""}
 HEADS = "h1,h2,h3,h4,h5,h6".split(",")
 HOVER = {}      # hover states per node, parsed from the original CSS by build.py
+# the original's full-width charcoal "Book Now" bars (homepage): shown as the site's blue button instead, at Josh's request
+DARK_BTN = ("rgb(39, 42, 50)", "#272a32")
+LEAD_BTN = {"background-color": "var(--blue)", "color": "#fff", "border": "1px solid #0707a5", "border-radius": "4px",
+            "font-size": "20px", "font-family": "var(--sans)", "font-weight": "700", "letter-spacing": ".02em",
+            "padding": "16px 40px", "display": "inline-block", "min-width": "260px", "max-width": "100%",
+            "box-shadow": "0 2px 6px rgba(3, 13, 155, .2)"}
 TEXT_ALL = {}   # rich-text modules whose editor colour applies to every element inside (set per page by build.py)
 
 
@@ -167,6 +173,11 @@ def rules_for(data, img_url):
                 p.update({"display": "block", "width": "100%"})
             elif bw:
                 p.update({"display": "inline-block", "min-width": f"{round(bw)}px"})
+            if b.get("background-color") in DARK_BTN:
+                add(f"{sel} .btn", LEAD_BTN)
+                add(f"{sel} .btn .ico", {"width": "1.1em", "height": "1.1em", "vertical-align": "-0.2em"})
+                add(sel, {"text-align": "center"})
+                continue
             add(f"{sel} .btn", {k: v for k, v in p.items() if v})
             if m.get("btnIcon") and m["btnIcon"].get("color") not in CLEAR:
                 add(f"{sel} .btn .ico", {"color": m["btnIcon"]["color"]})
@@ -190,7 +201,7 @@ def hover_rules():
     R = {}
     for node, kinds in HOVER.items():
         sel = f".n-{node}"
-        if kinds.get("btn"):
+        if kinds.get("btn") and (kinds["btn"].get("background-color") or "").lower() not in DARK_BTN:
             R[f"{sel} .btn:hover,{sel} .btn:focus"] = kinds["btn"]
         if kinds.get("btn_text") and kinds["btn_text"].get("color"):
             R[f"{sel} .btn:hover,{sel} .btn:focus,{sel} .btn:hover *"] = {"color": kinds["btn_text"]["color"]}
