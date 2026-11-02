@@ -16,6 +16,8 @@ from urllib.parse import urlparse, unquote
 from bs4 import BeautifulSoup, NavigableString, Comment, Tag
 from PIL import Image, ImageOps
 
+import node_styles
+
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 OUT = ROOT / "docs"
@@ -52,11 +54,24 @@ FOOTER_NAV = [("/", "Home"), ("/about-us-jo-lea-podiatrist/", "About Us"), ("/bo
 KEEP = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "ol", "li", "a", "strong", "b", "em", "i",
         "br", "img", "blockquote", "table", "thead", "tbody", "tr", "td", "th", "hr", "u", "sup", "sub"}
 BLOCK = {"h1", "h2", "h3", "h4", "h5", "h6", "p", "ul", "ol", "li", "blockquote", "table", "hr", "div", "figure"}
+STYLE_OK = {"color", "font-size", "font-weight", "font-style", "text-align", "text-decoration",
+            "background-color", "line-height", "font-family"}
+# small built-in icons for the original's button icons (Material Design shapes, Apache 2.0)
+ICONS = {
+    "bookmark": "M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z",
+    "arrow-alt-circle-right": "M12 1a11 11 0 1 0 0 22 11 11 0 0 0 0-22zm0 5.5 6 5.5-6 5.5V14H6v-4h6z",
+    "telephone": "M6.6 10.8a15 15 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.37 2.3.57 3.6.57a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z",
+    "calendar-check": "M16.5 11.1 15.4 10l-4.9 4.9-2.1-2.1-1.1 1.1 3.2 3.1zM19 3h-1V1h-2v2H8V1H6v2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm0 16H5V8h14z",
+    "map-marker-alt": "M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z",
+    "video": "M17 10.5V7a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3.5l4 4v-11z",
+}
 ICON_LABELS = {"twitter": "Twitter", "facebook": "Facebook", "instagram": "Instagram", "linkedin": "LinkedIn",
                "google": "Google", "youtube": "YouTube"}
 
 problems = []          # things we couldn't recover, reported at the end
 images = {}            # archive path -> output relative path (from site root)
+nodes_used = set()     # builder node ids that made it into the current page
+variants = {}          # output image path -> [(width, path), ...] smaller copies for srcset
 
 
 # ---------- helpers ----------
@@ -130,7 +145,7 @@ def add_image(url):
     if sub.parts[0] == "bb-plugin":
         sub = Path("cache") / re.sub(r"-[0-9a-f]{32}-[0-9a-z]*", "", src.name)
     ext = src.suffix.lower()
-    out_ext = ".png" if ext == ".png" else ".jpg"
+    out_ext = ".png" if ext == ".png" else ".webp"
     out_rel = Path("images") / sub.with_suffix(out_ext)
     out_rel = Path(str(out_rel).replace("-scaled", ""))
     dest = OUT / out_rel
@@ -147,12 +162,33 @@ def add_image(url):
     im.thumbnail((1600, 1600))
     if out_ext == ".png":
         im.save(dest, optimize=True)        # no metadata carried over
+        variants[images.setdefault(key, "/" + str(out_rel))] = []
     else:
-        im.convert("RGB").save(dest, "JPEG", quality=78, optimize=True, progressive=True)
+        # photos: WebP at full size plus smaller copies, so each device downloads only what it shows
+        im = im.convert("RGB")
+        im.save(dest, "WEBP", quality=76, method=6)
+        vs = []
+        for w in (480, 960):
+            if im.width > w * 1.25:
+                small = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
+                vdest = dest.with_name(f"{dest.stem}-{w}{dest.suffix}")
+                small.save(vdest, "WEBP", quality=76, method=6)
+                vs.append((w, "/" + str(vdest.relative_to(OUT))))
+        images[key] = "/" + str(out_rel)
+        variants[images[key]] = vs + [(im.width, images[key])]
     if ext == ".heic":
         tmp.unlink()
-    images[key] = "/" + str(out_rel)
     return images[key]
+
+
+def srcset_attrs(page, local, display_w=None):
+    """srcset/sizes for a photo; display_w is the width the original showed it at, if known."""
+    vs = variants.get(local) or []
+    if len(vs) < 2:
+        return ""
+    ss = ", ".join(f"{rel(page, p)} {w}w" for w, p in vs)
+    sizes = f"(max-width: {display_w}px) 100vw, {display_w}px" if display_w else "(max-width: 768px) 100vw, 50vw"
+    return f' srcset="{ss}" sizes="{sizes}"'
 
 
 def best_src(img):
@@ -171,6 +207,31 @@ def best_src(img):
 
 # ---------- conversion ----------
 
+def keep_style(el):
+    """The original's inline colours/sizes (from the page editor), minus anything risky."""
+    out = []
+    for decl in (el.get("style") or "").split(";"):
+        if ":" not in decl:
+            continue
+        k, v = decl.split(":", 1)
+        k, v = k.strip().lower(), v.strip()
+        if k in STYLE_OK and v and "##" not in v and "url(" not in v and "expression" not in v.lower():
+            out.append(f"{k}:{v}")
+    if el.name == "font" and el.get("color"):
+        out.append(f"color:{el['color']}")
+    st = ";".join(out)
+    return f' style="{html.escape(st, quote=True)}"' if st else ""
+
+
+def vis_class(el):
+    """The original's per-device visibility (desktop / tablet / phone) as hide-* classes."""
+    cls = [c[11:] for c in (el.get("class") or []) if c.startswith("fl-visible-")]
+    if not cls:
+        return ""
+    shown = {"desktop" if c == "large" else c for c in cls}
+    return "".join(f" hide-{d}" for d in ("desktop", "medium", "mobile") if d not in shown)
+
+
 def visible_on_desktop(el):
     cls = [c for c in (el.get("class") or []) if c.startswith("fl-visible-")]
     return not cls or any(c in ("fl-visible-desktop", "fl-visible-large") for c in cls)
@@ -188,7 +249,16 @@ def clean(node, page):
         if not isinstance(ch, Tag):
             continue
         name = ch.name
-        if name in ("script", "style", "noscript", "meta", "link", "input", "button", "svg", "iframe", "label", "select", "textarea"):
+        if name == "iframe":
+            src = ch.get("data-litespeed-src") or ch.get("src") or ""
+            m = re.search(r"youtube\.com/embed/([\w-]+)", src)
+            if m:   # YouTube video: privacy-enhanced player, no cookies until it is played
+                title = html.escape(ch.get("title") or "Video", quote=True)
+                out.append(f'<span class="video"><iframe src="https://www.youtube-nocookie.com/embed/{m.group(1)}" title="{title}" '
+                           'loading="lazy" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" '
+                           'referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe></span>')
+            continue
+        if name in ("script", "style", "noscript", "meta", "link", "input", "button", "svg", "label", "select", "textarea"):
             continue
         if name == "form":
             continue
@@ -207,7 +277,16 @@ def clean(node, page):
             alt = html.escape(ch.get("alt") or "", quote=True)
             w = ch.get("width") or ""
             size = f' style="width:{int(w)}px"' if w.isdigit() and int(w) < 700 else ""
-            out.append(f'<img src="{rel(page, local)}" alt="{alt}" loading="lazy"{size}>')
+            ss = srcset_attrs(page, local, int(w) if w.isdigit() and int(w) < 1100 else None)
+            out.append(f'<img src="{rel(page, local)}"{ss} alt="{alt}" loading="lazy"{size}>')
+            continue
+        if name == "i" and "fl-button-icon" in cls:
+            key = next((k for k in ICONS if any(c.endswith(k) for c in cls)), None)
+            side = "after" if "fl-button-icon-after" in cls else "before"
+            if key:
+                out.append(f'<svg class="ico ico-{side}" viewBox="0 0 24 24" aria-hidden="true"><path d="{ICONS[key]}"/></svg>')
+            elif any("google" in c for c in cls):
+                out.append(f'<span class="ico ico-{side} ico-g" aria-hidden="true">G</span>')
             continue
         if name == "i":
             icon = " ".join(cls)
@@ -217,6 +296,7 @@ def clean(node, page):
                     out.append(inner)
                 continue
         inner = clean(ch, page)
+        sattr = keep_style(ch)
         if name == "a":
             href = (ch.get("href") or "").strip()
             label = re.sub(r"<[^>]+>", "", inner).strip()
@@ -225,6 +305,9 @@ def clean(node, page):
                     if k in str(ch):
                         inner = v
                         break
+            if (not href or href == "#") and "fl-button" in cls:
+                out.append(f'<span class="btn">{inner}</span>')   # the original's button had no link either
+                continue
             if not href or href == "#" or "wp-admin" in href or "wp-login" in href:
                 out.append(inner)
                 continue
@@ -243,7 +326,9 @@ def clean(node, page):
                 continue
             c = ' class="btn"' if "fl-button" in cls else ""
             ext = ' rel="noopener"' if href.startswith("http") else ""
-            out.append(f'<a href="{html.escape(href, quote=True)}"{c}{ext}>{inner}</a>')
+            if ch.get("target") == "_blank" and href.startswith("http"):
+                ext = ' target="_blank" rel="noopener"'
+            out.append(f'<a href="{html.escape(href, quote=True)}"{c}{ext}{sattr}>{inner}</a>')
             continue
         if name in KEEP:
             if name in ("br", "hr"):
@@ -251,17 +336,22 @@ def clean(node, page):
             elif name in ("td", "th") and ch.get("colspan"):
                 out.append(f'<{name} colspan="{ch["colspan"]}">{inner}</{name}>')
             elif name in ("b",):
-                out.append(f"<strong>{inner}</strong>")
+                out.append(f"<strong{sattr}>{inner}</strong>")
             elif name == "i":
-                out.append(f"<em>{inner}</em>")
+                out.append(f"<em{sattr}>{inner}</em>")
             else:
-                out.append(f"<{name}>{inner}</{name}>")
+                out.append(f"<{name}{sattr}>{inner}</{name}>")
+            continue
+        if name in ("span", "font"):
+            out.append(f"<span{sattr}>{inner}</span>" if sattr else inner)
             continue
         # div/span/section/etc: unwrap; make a paragraph if a div holds only inline content
         if name in ("div", "section", "article", "figure", "header", "footer", "aside", "center"):
             text_only = not re.search(r"<(h\d|p|ul|ol|li|blockquote|table|div|hr|img)\b", inner)
             if text_only and re.sub(r"<[^>]+>|\s|&nbsp;", "", inner):
-                out.append(f"<p>{inner.strip()}</p>")
+                out.append(f"<p{sattr}>{inner.strip()}</p>")
+            elif sattr:
+                out.append(f"<div{sattr}>{inner}</div>")
             else:
                 out.append(inner)
             continue
@@ -272,7 +362,7 @@ def clean(node, page):
 def tidy(h):
     h = h.replace("\xa0", " ")
     h = re.sub(r"<p>\s*(<br>\s*)*</p>", "", h)
-    h = re.sub(r"<(strong|em|span|u)>\s*</\1>", "", h)
+    h = re.sub(r"<(strong|em|span|u)(\s[^>]*)?>\s*</\1>", "", h)
     h = re.sub(r"<p>\s*(<(h\d|ul|ol|p|blockquote)\b)", r"\1", h)
     h = re.sub(r"[ \t]{2,}", " ", h)
     h = re.sub(r"\n\s*\n+", "\n", h)
@@ -292,6 +382,31 @@ def row_backgrounds(soup):
     widths = {}
     for m in re.finditer(r"\.fl-node-([a-z0-9]+)\s*\{\s*width:\s*([\d.]+)%", css):
         widths.setdefault(m.group(1), float(m.group(2)))
+    # rich-text editor settings that apply to every element inside the block (colour, font)
+    for m in re.finditer(r"\.fl-node-([a-z0-9]+)(?: \.fl-module-content)? \.fl-rich-text \*(:not\(b,strong\))?\{([^}]*)\}", css):
+        decls = dict((k.strip(), v.strip()) for k, v in (d.split(":", 1) for d in m.group(3).split(";") if ":" in d))
+        node_styles.TEXT_ALL.setdefault(m.group(1), {}).update(decls)
+    # the original's hover states, per builder node (buttons, links)
+    for m in re.finditer(r"([^{}@]+)\{([^{}]*)\}", css):
+        if ":hover" not in m.group(1):
+            continue
+        decls = dict((k.strip(), v.strip()) for k, v in (d.split(":", 1) for d in m.group(2).split(";") if ":" in d))
+        decls = {k: v for k, v in decls.items() if k in ("background", "background-color", "background-image", "color",
+                                                          "border", "border-color", "border-top-color", "text-decoration")}
+        if not decls:
+            continue
+        for part in re.split(r",(?![^()]*\))", m.group(1)):
+            n = re.search(r"fl-node-([a-z0-9]+)", part)
+            if ":hover" not in part or not n:
+                continue
+            tail = part.split(":hover", 1)[1].strip()
+            if "fl-button" in part:
+                kind = "btn_text" if tail else "btn"
+            elif re.search(r"\ba:hover$", part.strip()):
+                kind = "link"
+            else:
+                continue
+            node_styles.HOVER.setdefault(n.group(1), {}).setdefault(kind, {}).update(decls)
     bgs = {}
     for m in re.finditer(r"\.fl-node-([a-z0-9]+)\s*>\s*\.fl-row-content-wrap\s*\{[^}]*background-image:\s*url\(([^)]*)\)", css):
         bgs[m.group(1)] = m.group(2).strip("'\"")
@@ -300,6 +415,15 @@ def row_backgrounds(soup):
 
 def convert_module(m, page):
     t = m.get("data-type") or next((c[10:] for c in m.get("class", []) if c.startswith("fl-module-") and c != "fl-module-content"), "")
+    body = module_body(m, t, page)
+    if not body:
+        return ""
+    node = m.get("data-node", "")
+    nodes_used.add(node)
+    return f'<div class="m m-{t} n-{node}{vis_class(m)}">{body}</div>'
+
+
+def module_body(m, t, page):
     if t == "contact-form":
         return contact_block(page)
     if t == "map":
@@ -311,9 +435,8 @@ def convert_module(m, page):
             return (f'<p class="small">If the booking form does not load, <a href="{CLINIKO}" rel="noopener">open online booking</a>.</p>'
                     f'<iframe class="cliniko" src="{CLINIKO}?embedded=true" title="Book online with kingstonfeet"></iframe>')
         return tidy(clean(m, page))
-    if t == "widget":
-        if m.select_one(".widget_search"):
-            return ""
+    if t == "widget" and m.select_one(".widget_search"):
+        return ""
     if t == "slideshow" and not m.find("img"):
         return ""
     if t == "testimonials":
@@ -322,8 +445,38 @@ def convert_module(m, page):
         if quotes:
             head = "".join(f"<h3>{html.escape(h.get_text().strip())}</h3>" for h in m.select(".fl-testimonials-heading"))
             return head + '<div class="testimonials">' + "".join(f"<blockquote>{q}</blockquote>" for q in quotes) + "</div>"
-    body = tidy(clean(m, page))
-    return f'<div class="m m-{t}">{body}</div>' if body else ""
+    if t == "post-slider":
+        return post_cards(m, page)
+    return tidy(clean(m, page))
+
+
+def post_cards(m, page):
+    """Blog post slider/grid: one card per post (image, title, link), no slider script."""
+    cards = []
+    seen = set()
+    for post in m.select(".fl-post-slider-post, .fl-post-grid-post, .fl-post-feed-post"):
+        if "swiper-slide-duplicate" in (post.get("class") or []):
+            continue
+        a = post.select_one(".fl-post-slider-title a, .fl-post-grid-title a, h2 a, h3 a")
+        if not a or a.get("href") in seen:
+            continue
+        seen.add(a.get("href"))
+        ip = internal_path(a["href"]) or a["href"]
+        href = rel(page, ip.split("#")[0]) if ip.startswith("/") else ip
+        img = ""
+        meta_img = post.select_one('[itemprop="image"] [itemprop="url"]')
+        src = (meta_img.get("content") if meta_img else None)
+        if not src:
+            i = post.find("img")
+            src = best_src(i) if i else None
+        if src:
+            local = add_image(src)
+            if local:
+                img = f'<img src="{rel(page, local)}"{srcset_attrs(page, local, 600)} alt="" loading="lazy">'
+        ex = post.select_one(".fl-post-grid-content p, .fl-post-slider-content p, .fl-post-excerpt")
+        excerpt = f"<p>{html.escape(ex.get_text().strip())}</p>" if ex and ex.get_text().strip() else ""
+        cards.append(f'<a class="post-card" href="{href}">{img}<span class="post-card-title">{html.escape(a.get_text().strip())}</span>{excerpt}</a>')
+    return '<div class="post-cards">' + "".join(cards) + "</div>" if cards else ""
 
 
 def child_blocks(el):
@@ -341,17 +494,17 @@ def child_blocks(el):
 def convert_group(grp, page, widths):
     cols, fr = [], []
     for col in grp.find_all(class_="fl-col", recursive=False):
-        if not visible_on_desktop(col):
-            continue
         parts = []
         for b in child_blocks(col):
-            if not visible_on_desktop(b):
-                continue
             h = convert_group(b, page, widths) if "fl-col-group" in b.get("class", []) else convert_module(b, page)
             if h:
                 parts.append(h)
+        if not parts and widths.get(col.get("data-node", "")) and not vis_class(col):
+            parts = [""]   # empty column kept as a spacer, as in the original layout
         if parts:
-            cols.append('<div class="col">' + "\n".join(parts) + "</div>")
+            nodes_used.add(col.get("data-node", ""))
+            cc = " click-col" if "click-col" in (col.get("class") or []) else ""
+            cols.append(f'<div class="col n-{col.get("data-node", "")}{vis_class(col)}{cc}">' + "\n".join(parts) + "</div>")
             fr.append(widths.get(col.get("data-node", ""), 0))
     if not cols:
         return ""
@@ -366,23 +519,12 @@ def convert_builder(container, page, bgs, widths):
     for row in container.select(".fl-row"):
         if row.find_parent(class_="fl-row"):
             continue
-        if not visible_on_desktop(row):
-            continue
         node = row.get("data-node", "")
-        bg = bgs.get(node)
-        style = ""
-        cls = "row"
-        if bg:
-            local = add_image(bg)
-            if local:
-                style = f' style="background-image:url(\'{rel(page, local)}\')"'
-                cls += " row-bg"
-        if "fl-row-bg-color" in row.get("class", []) or "fl-row-bg-gradient" in row.get("class", []):
-            cls += " row-tint"
         groups = [convert_group(g, page, widths) for g in row.select(".fl-col-group") if not g.find_parent(class_="fl-col-group")]
         groups = [g for g in groups if g]
         if groups:
-            out.append(f'<section class="{cls}"{style}><div class="wrap">' + "\n".join(groups) + "</div></section>")
+            nodes_used.add(node)
+            out.append(f'<section class="row n-{node}{vis_class(row)}"><div class="wrap">' + "\n".join(groups) + "</div></section>")
     return "\n".join(out)
 
 
@@ -416,18 +558,15 @@ def layout(page, title, desc, body, extra_head=""):
 <link rel="icon" href="{rel(page, '/favicon.png')}" sizes="32x32">
 <link rel="apple-touch-icon" href="{rel(page, '/apple-touch-icon.png')}">
 <link rel="stylesheet" href="{css}">
+<script src="{rel(page, '/assets/site.js')}" defer></script>
 {extra_head}</head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="site-header">
   <div class="wrap header-inner">
-    <a class="logo" href="{rel(page, '/')}"><span class="logo-k">kingston</span><span class="logo-f">feet</span><span class="tagline">...because your footcare matters</span></a>
-    <div class="header-actions">
-      <a class="phone" href="{TEL}">{PHONE}</a>
-      <a class="btn btn-small" href="{CLINIKO}" rel="noopener">Book now</a>
-    </div>
+    <a class="logo" href="{rel(page, '/')}"><span class="logo-k">kingston</span>feet<span class="tagline">...because <span class="tag-your">your</span> footcare matters</span></a>
     <div class="menu">
-      <input type="checkbox" id="nav-toggle" class="nav-toggle"><label for="nav-toggle">Menu</label>
+      <input type="checkbox" id="nav-toggle" class="nav-toggle"><label for="nav-toggle">&#9776;<span> Menu</span></label>
       <nav aria-label="Main"><ul>{nav}</ul></nav>
     </div>
   </div>
@@ -437,11 +576,11 @@ def layout(page, title, desc, body, extra_head=""):
 </main>
 <footer class="site-footer">
   <div class="wrap">
-    <p class="footer-contact"><a href="{TEL}">{PHONE}</a> · <a href="mailto:{EMAIL}">{EMAIL}</a> · 196 Richmond Road, Kingston upon Thames, KT2 5HE</p>
     <nav aria-label="Footer"><ul>{fnav}</ul></nav>
     <p class="copy">© 2026 kingstonfeet</p>
   </div>
 </footer>
+<a href="#main" id="to-top" aria-label="Scroll to top"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.4 15.4 12 10.8l4.6 4.6L18 14l-6-6-6 6z"/></svg></a>
 </body>
 </html>
 """
@@ -472,13 +611,16 @@ def build_page(page):
     title = soup.title.get_text().strip() if soup.title else "kingstonfeet"
     md = soup.find("meta", attrs={"name": "description"})
     desc = md["content"].strip() if md and md.get("content") else ""
+    node_styles.TEXT_ALL.clear()
+    node_styles.HOVER.clear()
     bgs, widths = row_backgrounds(soup)
+    nodes_used.clear()
     main = soup.select_one(".fl-builder-content-primary")
     parts = []
     post = soup.select_one("article.fl-post")
     header = soup.select_one(".fl-post-header")
     if header and header.find("h1") and (not main or "type-post" in (post.get("class") or [])):
-        parts.append(f'<section class="row page-title"><div class="wrap"><h1>{html.escape(header.find("h1").get_text().strip())}</h1></div></section>')
+        parts.append(f'<section class="page-title"><div class="wrap"><h1>{html.escape(header.find("h1").get_text().strip())}</h1></div></section>')
     if main:
         parts.append(convert_builder(main, page, bgs, widths))
     else:
@@ -486,10 +628,14 @@ def build_page(page):
         parts.append(f'<section class="row"><div class="wrap prose">{tidy(clean(content, page))}</div></section>')
     body = "\n".join(p for p in parts if p)
     body = body.replace(' loading="lazy"', "", 2)   # first images load straight away
-    extra = ""
+    def img_url(u):
+        local = add_image(u)
+        return rel(page, local) if local else None
+    css = node_styles.page_css(page, nodes_used, img_url)
+    extra = f"<style>\n{css}\n</style>\n" if css else ""
     if "cliniko" in body and "<iframe" in body:
         # Cliniko's own resize snippet for its embedded booking form
-        extra = ("<script>window.addEventListener('message',function(e){var f=document.querySelector('iframe.cliniko');"
+        extra += ("<script>window.addEventListener('message',function(e){var f=document.querySelector('iframe.cliniko');"
                  "if(!f||typeof e.data!=='string')return;if(e.data.indexOf('cliniko-bookings-resize')>-1){"
                  "f.style.height=Number(e.data.split(':')[1])+'px'}if(e.data.indexOf('cliniko-bookings-page')>-1){f.scrollIntoView()}});</script>\n")
     out = OUT / page.strip("/") / "index.html" if page != "/" else OUT / "index.html"
@@ -503,7 +649,9 @@ def main():
         shutil.rmtree(OUT)
     OUT.mkdir()
     (OUT / "assets").mkdir()
-    shutil.copy(HERE / "site.css", OUT / "assets" / "site.css")
+    shutil.copytree(HERE / "fonts", OUT / "fonts", ignore=shutil.ignore_patterns("fonts.css"))
+    shutil.copy(HERE / "site.js", OUT / "assets" / "site.js")
+    (OUT / "assets" / "site.css").write_text((HERE / "fonts" / "fonts.css").read_text() + (HERE / "site.css").read_text())
     meta = {}
     for p in PAGES:
         meta[p] = build_page(p)
@@ -525,7 +673,8 @@ def main():
     page404 = page404.replace(f'<link rel="canonical" href="{SITE}/">', '<meta name="robots" content="noindex">')
     page404 = re.sub(r'<link rel="(icon|apple-touch-icon)"[^>]*>\n', "", page404)
     page404 = page404.replace('<link rel="stylesheet" href="assets/site.css">',
-                              "<style>" + (HERE / "site.css").read_text() + "</style>")
+                              "<style>" + (HERE / "fonts" / "fonts.css").read_text().replace("../fonts/", f"{SITE}/fonts/")
+                              + (HERE / "site.css").read_text() + "</style>")
     page404 = re.sub(r'href="(?!https?:|tel:|mailto:|#)\.?/?([^"]*)"', lambda m: f'href="{SITE}/{m.group(1)}"', page404)
     (OUT / "404.html").write_text(page404)
     # sitemap + robots
