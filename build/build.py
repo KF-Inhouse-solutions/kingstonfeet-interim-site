@@ -485,6 +485,7 @@ def build_page(page):
         content = soup.select_one(".fl-post-content")
         parts.append(f'<section class="row"><div class="wrap prose">{tidy(clean(content, page))}</div></section>')
     body = "\n".join(p for p in parts if p)
+    body = body.replace(' loading="lazy"', "", 2)   # first images load straight away
     extra = ""
     if "cliniko" in body and "<iframe" in body:
         # Cliniko's own resize snippet for its embedded booking form
