@@ -534,6 +534,7 @@ def main():
         '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' + urls + "</urlset>\n")
     (OUT / "robots.txt").write_text(f"User-agent: *\nAllow: /\n\nSitemap: {SITE}/sitemap.xml\n")
     (OUT / ".nojekyll").write_text("")
+    (OUT / "CNAME").write_text("kingstonfeet.com\n")
     (ROOT / "build" / "report.json").write_text(json.dumps(
         {"pages": {p: {"title": t, "description": d} for p, (t, d) in meta.items()},
          "forwards": FORWARDS, "images": sorted(images.values()), "problems": problems}, indent=1))
